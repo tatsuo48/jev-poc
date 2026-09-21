@@ -2,7 +2,7 @@
 
 訪問者が AI を選んでスタートを押すと、2048 を 1 手ずつ打つ様子を観戦できるページ。Cloudflare Workers の無料プランで動く。
 
-公開先: https://jev-2048.personal-3f0.workers.dev
+公開先: https://jev-2048.tatsuo48.workers.dev
 
 ## 仕組み
 

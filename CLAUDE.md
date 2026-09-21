@@ -2,7 +2,7 @@
 
 TypeSafe AI の判定モデル jev(文章を生成せず Choice / Score / Noul の判定だけを返す)に 2048 を遊ばせる PoC。Go の CLI と、Cloudflare Workers の Web デモの 2 つから成る。
 
-- 公開デモ: https://jev-2048.personal-3f0.workers.dev
+- 公開デモ: https://jev-2048.tatsuo48.workers.dev
 - リポジトリ: https://github.com/tatsuo48/jev-poc (パブリック)
 - 結果と考察は `README.md`、Web デモの仕組みと悪用対策は `web/README.md`、設計の経緯は `docs/superpowers/specs/`
 

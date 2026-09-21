@@ -98,7 +98,7 @@ jev API: calls=1718 input_tokens=1191322 output_tokens=72081
 
 ## Web デモ
 
-公開先: https://jev-2048.personal-3f0.workers.dev
+公開先: https://jev-2048.tatsuo48.workers.dev
 
 ブラウザで AI を選んで観戦できるページを、Cloudflare Workers の無料プランで動く形で [web/](web/) に置いてある。ゲームと古典 AI はブラウザで動かし、Worker は jev の手番だけを中継する。公開エンドポイントなので、盤面の検証、サーバー側でのプロンプト組み立て、IP ごとのレート制限、全訪問者合計で 1 日 20,000 手の上限を入れている。仕組み・ローカル実行・デプロイ手順は [web/README.md](web/README.md)。
 
