@@ -53,7 +53,7 @@ export class GameLoop {
       while (!this.game.over() && !this.stopped) {
         const started = performance.now();
         const picked = await this.pickWithRetry();
-        if (!picked || this.stopped) return;
+        if (!picked) return;
         this.game.step(picked.move);
         this.events.onStep({
           board: this.game.board,
@@ -78,13 +78,17 @@ export class GameLoop {
       try {
         return await this.player.pick(this.game.board);
       } catch (err) {
+        // A stop pressed while the pick was in flight (or during the wait below) ends the
+        // loop silently: no onError, no onRetry, and no further pick is attempted.
+        if (this.stopped) return null;
         const code = err instanceof ApiError ? err.code : "unexpected_error";
-        if (!RETRYABLE.has(code) || attempt === MAX_RETRIES || this.stopped) {
+        if (!RETRYABLE.has(code) || attempt === MAX_RETRIES) {
           this.events.onError(code);
           return null;
         }
         this.events.onRetry(attempt + 1);
         await this.sleep(1000 * 2 ** attempt);
+        if (this.stopped) return null;
       }
     }
   }

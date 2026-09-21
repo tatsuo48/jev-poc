@@ -52,7 +52,11 @@ function newLoop(): GameLoop {
   const seed = Number.parseInt(seedInput.value, 10) || 0;
   const player = createPlayer(name, seed);
   const created = new GameLoop(player, seed, Number(speedSelect.value), {
+    // Guard every event: if the player/seed changed (or a new loop was started) while this
+    // loop's async work was in flight, `loop` no longer points at `created`, and its events
+    // must be ignored rather than repaint the UI for a run that is no longer current.
     onStep(step) {
+      if (loop !== created) return;
       renderBoard(boardEl, step.board);
       renderBars(barsEl, step.info, step.move);
       setText(statsEl, `score ${step.score.toLocaleString()}　moves ${step.moves}　last ${step.move}　${Math.round(step.latencyMs)}ms`);
@@ -60,18 +64,22 @@ function newLoop(): GameLoop {
       showRemaining(step.info.remaining);
     },
     onRetry(attempt) {
+      if (loop !== created) return;
       setText(messageEl, `応答待ち… 再試行 ${attempt} / 3`);
     },
     onFinish(result) {
+      if (loop !== created) return;
       setText(messageEl, `ゲーム終了: score ${result.score.toLocaleString()}、${result.moves} 手、最大タイル ${result.maxTile}`);
       setRunning(false);
     },
     onError(code) {
+      if (loop !== created) return;
       setText(messageEl, ERROR_TEXT[code] ?? `エラーが起きました (${code})`);
       setRunning(false, code !== "daily_budget_exhausted");
       if (code === "daily_budget_exhausted") showRemaining(0);
     },
   });
+  loop = created;
   renderBoard(boardEl, created.game.board);
   renderBars(barsEl, {});
   setText(statsEl, "score 0　moves 0");

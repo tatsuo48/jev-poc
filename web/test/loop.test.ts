@@ -101,7 +101,7 @@ describe("GameLoop", () => {
     expect(log.steps).toEqual([]);
   });
 
-  it("stop halts the loop and discards a pick that arrives afterwards", async () => {
+  it("stop halts the loop after applying the pick that was already in flight", async () => {
     const { log, events } = recorder();
     let loop!: GameLoop;
     const player: Player = {
@@ -114,9 +114,46 @@ describe("GameLoop", () => {
     };
     loop = new GameLoop(player, 4, 0, events, noSleep);
     await loop.start();
-    expect(loop.game.moves).toBe(3);
-    expect(log.steps.length).toBe(3);
+    expect(loop.game.moves).toBe(4);
+    expect(log.steps.length).toBe(4);
     expect(log.finished).toEqual([]);
+    expect(loop.running).toBe(false);
+  });
+
+  it("stop during the first backoff wait ends the loop silently without another pick", async () => {
+    const { log, events } = recorder();
+    let loop!: GameLoop;
+    const player = scripted([new ApiError("rate_limited", 429), null]);
+    const sleep = async (_ms: number) => {
+      loop.stop();
+    };
+    loop = new GameLoop(player, 4, 0, events, sleep);
+    await loop.start();
+    expect(player.calls).toBe(1);
+    expect(log.errors).toEqual([]);
+    expect(log.retries).toEqual([1]);
+    expect(loop.running).toBe(false);
+    expect(log.steps).toEqual([]);
+  });
+
+  it("stop requested while a failing pick is in flight ends the loop silently", async () => {
+    const { log, events } = recorder();
+    let loop!: GameLoop;
+    let calls = 0;
+    const player: Player = {
+      name: "jev-sim",
+      usesJev: true,
+      async pick() {
+        calls++;
+        loop.stop();
+        throw new ApiError("rate_limited", 429);
+      },
+    };
+    loop = new GameLoop(player, 4, 0, events, noSleep);
+    await loop.start();
+    expect(calls).toBe(1);
+    expect(log.retries).toEqual([]);
+    expect(log.errors).toEqual([]);
     expect(loop.running).toBe(false);
   });
 
