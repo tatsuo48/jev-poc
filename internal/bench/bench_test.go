@@ -50,7 +50,10 @@ func factory(name string, _ int64) (player.Player, error) {
 }
 
 func TestRunPlaysEveryPlayerOnTheSameSeeds(t *testing.T) {
-	results := Run(context.Background(), Config{Players: []string{"a", "b"}, Games: 3, Seed: 10, Parallel: 4, New: factory})
+	results, err := Run(context.Background(), Config{Players: []string{"a", "b"}, Games: 3, Seed: 10, Parallel: 4, New: factory})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	if len(results) != 6 {
 		t.Fatalf("len = %d, want 6", len(results))
 	}
@@ -67,7 +70,10 @@ func TestRunPlaysEveryPlayerOnTheSameSeeds(t *testing.T) {
 
 func TestRunWritesOneJSONLinePerMove(t *testing.T) {
 	var out bytes.Buffer
-	results := Run(context.Background(), Config{Players: []string{"a"}, Games: 2, Seed: 1, Parallel: 2, New: factory, Out: &out})
+	results, err := Run(context.Background(), Config{Players: []string{"a"}, Games: 2, Seed: 1, Parallel: 2, New: factory, Out: &out})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	moves := results[0].Moves + results[1].Moves
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) != moves {
@@ -86,7 +92,10 @@ func TestRunWritesOneJSONLinePerMove(t *testing.T) {
 
 func TestSummarizeKeepsErroredGamesOutOfAverages(t *testing.T) {
 	players := []string{"a", "broken"}
-	results := Run(context.Background(), Config{Players: players, Games: 3, Seed: 1, Parallel: 2, New: factory})
+	results, err := Run(context.Background(), Config{Players: players, Games: 3, Seed: 1, Parallel: 2, New: factory})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	sums := Summarize(players, results)
 
 	a, broken := sums[0], sums[1]
@@ -112,14 +121,20 @@ func TestSummarizeKeepsErroredGamesOutOfAverages(t *testing.T) {
 }
 
 func TestRunReportsUnknownPlayerAsError(t *testing.T) {
-	results := Run(context.Background(), Config{Players: []string{"nobody"}, Games: 1, Seed: 1, Parallel: 1, New: factory})
+	results, err := Run(context.Background(), Config{Players: []string{"nobody"}, Games: 1, Seed: 1, Parallel: 1, New: factory})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	if len(results) != 1 || results[0].Err == nil || results[0].Player != "nobody" {
 		t.Fatalf("results = %+v", results)
 	}
 }
 
 func TestBudgetExceededStopsTheRun(t *testing.T) {
-	results := Run(context.Background(), Config{Players: []string{"broke", "a"}, Games: 50, Seed: 1, Parallel: 1, New: factory})
+	results, err := Run(context.Background(), Config{Players: []string{"broke", "a"}, Games: 50, Seed: 1, Parallel: 1, New: factory})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	if !BudgetExceeded(results) {
 		t.Fatal("BudgetExceeded = false")
 	}
@@ -128,5 +143,36 @@ func TestBudgetExceededStopsTheRun(t *testing.T) {
 	}
 	if BudgetExceeded(nil) {
 		t.Fatal("BudgetExceeded(nil) = true")
+	}
+}
+
+type failingWriter struct {
+	err error
+}
+
+func (w *failingWriter) Write(p []byte) (int, error) {
+	return 0, w.err
+}
+
+func TestRunReportsMoveLogWriteError(t *testing.T) {
+	writeErr := errors.New("write failed")
+	failing := &failingWriter{err: writeErr}
+	results, err := Run(context.Background(), Config{Players: []string{"a"}, Games: 2, Seed: 1, Parallel: 1, New: factory, Out: failing})
+	if err == nil {
+		t.Fatal("Run returned nil error, expected write error")
+	}
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("Run error does not match: got %v, want error with cause %v", err, writeErr)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for i, r := range results {
+		if r.Err != nil {
+			t.Errorf("result[%d].Err = %v, want nil (game should still finish)", i, r.Err)
+		}
+		if r.Moves == 0 {
+			t.Errorf("result[%d].Moves = 0, want > 0", i)
+		}
 	}
 }

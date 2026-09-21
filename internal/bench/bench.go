@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"sort"
 	"sync"
@@ -38,8 +39,10 @@ type moveLog struct {
 }
 
 // Run plays Games games per player, Parallel games at a time. Hitting the jev
-// call budget cancels every game still in flight.
-func Run(ctx context.Context, cfg Config) []runner.Result {
+// call budget cancels every game still in flight. Returns the first JSONL write error
+// if cfg.Out logging fails, wrapped as "bench: write move log: <err>"; games continue
+// to completion.
+func Run(ctx context.Context, cfg Config) ([]runner.Result, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -49,10 +52,11 @@ func Run(ctx context.Context, cfg Config) []runner.Result {
 	}
 	jobs := make(chan job)
 	var (
-		mu      sync.Mutex // guards results and the JSONL encoder
-		results []runner.Result
-		wg      sync.WaitGroup
-		enc     *json.Encoder
+		mu        sync.Mutex // guards results, the JSONL encoder, and logErr
+		results   []runner.Result
+		wg        sync.WaitGroup
+		enc       *json.Encoder
+		logErr    error
 	)
 	if cfg.Out != nil {
 		enc = json.NewEncoder(cfg.Out)
@@ -67,7 +71,7 @@ func Run(ctx context.Context, cfg Config) []runner.Result {
 		go func() {
 			defer wg.Done()
 			for j := range jobs {
-				res := play(ctx, cfg.New, j.name, j.seed, enc, &mu)
+				res := play(ctx, cfg.New, j.name, j.seed, enc, &mu, &logErr)
 				if errors.Is(res.Err, jev.ErrBudgetExceeded) {
 					cancel()
 				}
@@ -101,10 +105,15 @@ feed:
 		}
 		return results[i].Seed < results[j].Seed
 	})
-	return results
+
+	var retErr error
+	if logErr != nil {
+		retErr = fmt.Errorf("bench: write move log: %w", logErr)
+	}
+	return results, retErr
 }
 
-func play(ctx context.Context, newPlayer NewPlayer, name string, seed int64, enc *json.Encoder, mu *sync.Mutex) runner.Result {
+func play(ctx context.Context, newPlayer NewPlayer, name string, seed int64, enc *json.Encoder, mu *sync.Mutex, logErr *error) runner.Result {
 	p, err := newPlayer(name, seed)
 	if err != nil {
 		return runner.Result{Player: name, Seed: seed, Err: err}
@@ -118,16 +127,21 @@ func play(ctx context.Context, newPlayer NewPlayer, name string, seed int64, enc
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			enc.Encode(moveLog{
-				Player:        name,
-				Seed:          seed,
-				MoveNo:        s.MoveNo,
-				Board:         s.Before,
-				Move:          s.Move.String(),
-				Probabilities: probs,
-				Confidence:    s.Info.Confidence,
-				LatencyMS:     float64(s.Info.Latency.Microseconds()) / 1000,
-			})
+			// Only write if we haven't already encountered a write error
+			if *logErr == nil {
+				if err := enc.Encode(moveLog{
+					Player:        name,
+					Seed:          seed,
+					MoveNo:        s.MoveNo,
+					Board:         s.Before,
+					Move:          s.Move.String(),
+					Probabilities: probs,
+					Confidence:    s.Info.Confidence,
+					LatencyMS:     float64(s.Info.Latency.Microseconds()) / 1000,
+				}); err != nil {
+					*logErr = err
+				}
+			}
 		}
 	}
 	return runner.PlayGame(ctx, p, seed, obs)

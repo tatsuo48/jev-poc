@@ -128,7 +128,7 @@ func runBench(ctx context.Context, args []string) int {
 		out = f
 	}
 
-	results := bench.Run(ctx, bench.Config{
+	results, logErr := bench.Run(ctx, bench.Config{
 		Players:  names,
 		Games:    *games,
 		Seed:     *seed,
@@ -151,6 +151,10 @@ func runBench(ctx context.Context, args []string) int {
 	}
 	if bench.BudgetExceeded(results) {
 		fmt.Fprintln(os.Stderr, "stopped: --max-calls was reached")
+		return 1
+	}
+	if logErr != nil {
+		fmt.Fprintln(os.Stderr, logErr)
 		return 1
 	}
 	if ctx.Err() != nil {
