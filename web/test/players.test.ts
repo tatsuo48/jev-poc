@@ -26,7 +26,7 @@ describe("classic players", () => {
     for (const name of ["random", "greedy", "expectimax"] as const) {
       const p = createPlayer(name, 1);
       expect(p.usesJev).toBe(false);
-      expect(await playOut(createPlayer(name, 3), 3)).toBeGreaterThan(0);
+      expect(await playOut(createPlayer(name, 3, undefined, 1), 3)).toBeGreaterThan(0);
       await expect(p.pick(stuck)).rejects.toThrow("no legal moves");
     }
   });

@@ -73,7 +73,7 @@ describe("GameLoop", () => {
   });
 
   it("does not retry when the daily budget is exhausted or the request is invalid", async () => {
-    for (const code of ["daily_budget_exhausted", "invalid_request", "forbidden_origin"]) {
+    for (const code of ["daily_budget_exhausted", "invalid_request", "forbidden_origin", "internal_error"]) {
       const { log, events } = recorder();
       const player = scripted([new ApiError(code, 429)]);
       await new GameLoop(player, 4, 0, events, noSleep).start();
@@ -81,6 +81,16 @@ describe("GameLoop", () => {
       expect(log.retries).toEqual([]);
       expect(player.calls).toBe(1);
     }
+  });
+
+  it("retries a service_unavailable failure and continues the game", async () => {
+    const { log, events } = recorder();
+    const player = scripted([new ApiError("service_unavailable", 503), null]);
+    const loop = new GameLoop(player, 4, 0, events, noSleep);
+    await loop.start();
+    expect(log.retries).toEqual([1]);
+    expect(log.errors).toEqual([]);
+    expect(log.steps.length).toBeGreaterThan(0);
   });
 
   it("never substitutes a move for a failed pick", async () => {
@@ -117,5 +127,22 @@ describe("GameLoop", () => {
     await loop.start();
     await first;
     expect(loop.game.over()).toBe(true);
+  });
+
+  it("changing delayMs mid-game changes the sleep used after the next step", async () => {
+    const { events } = recorder();
+    const waits: number[] = [];
+    let loop!: GameLoop;
+    const player: Player = {
+      name: "greedy",
+      usesJev: false,
+      async pick(board) {
+        if (loop.game.moves === 0) loop.delayMs = 0;
+        return { move: legalMoves(board)[0], info: {} };
+      },
+    };
+    loop = new GameLoop(player, 4, 500, events, async (ms) => { waits.push(ms); });
+    await loop.start();
+    expect(waits[0]).toBe(0);
   });
 });

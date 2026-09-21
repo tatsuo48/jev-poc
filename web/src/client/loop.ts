@@ -18,7 +18,7 @@ export interface LoopEvents {
 }
 
 const MAX_RETRIES = 3;
-const RETRYABLE = new Set(["rate_limited", "upstream_error", "network_error"]);
+const RETRYABLE = new Set(["rate_limited", "upstream_error", "network_error", "service_unavailable"]);
 
 const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -34,7 +34,7 @@ export class GameLoop {
   constructor(
     private readonly player: Player,
     seed: number,
-    private readonly delayMs: number,
+    public delayMs: number,
     private readonly events: LoopEvents,
     private readonly sleep: (ms: number) => Promise<void> = realSleep,
   ) {

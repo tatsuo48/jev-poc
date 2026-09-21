@@ -20,6 +20,8 @@ const ERROR_TEXT: Record<string, string> = {
   rate_limited: "アクセスが集中しています。少し待ってから「再開する」を押してください。",
   network_error: "通信に失敗しました。「再開する」で続きから打てます。",
   upstream_error: "jev から応答を得られませんでした。「再開する」で続きから打てます。",
+  service_unavailable: "サービスが一時的に利用できません。少し待ってから「再開する」を押してください。",
+  internal_error: "サーバーで問題が起きました。少し待ってから「再開する」を押してください。",
 };
 
 let loop: GameLoop | null = null;
@@ -42,7 +44,7 @@ async function refreshRemaining(): Promise<void> {
 function setRunning(running: boolean, resumable = false): void {
   startButton.textContent = running ? "■ ストップ" : resumable ? "▶ 再開する" : "▶ スタート";
   startButton.dataset.mode = running ? "stop" : resumable ? "resume" : "start";
-  playerSelect.disabled = seedInput.disabled = speedSelect.disabled = running;
+  playerSelect.disabled = seedInput.disabled = running;
 }
 
 function newLoop(): GameLoop {
@@ -87,7 +89,10 @@ startButton.addEventListener("click", () => {
   setText(messageEl, "");
   setRunning(true);
   const current = loop;
-  lastRun = lastRun.then(() => current.start());
+  lastRun = lastRun.then(() => current.start()).catch(() => {
+    setText(messageEl, "表示の更新中に問題が起きました。「再開する」で続きから打てます。");
+    setRunning(false, true);
+  });
 });
 
 for (const name of PLAYER_NAMES) playerSelect.add(new Option(name, name));
@@ -97,6 +102,9 @@ for (const el of [playerSelect, seedInput]) {
     setRunning(false);
   });
 }
+speedSelect.addEventListener("change", () => {
+  if (loop) loop.delayMs = Number(speedSelect.value);
+});
 renderBoard(boardEl, emptyBoard());
 setRunning(false);
 void refreshRemaining();

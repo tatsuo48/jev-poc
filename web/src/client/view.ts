@@ -41,9 +41,10 @@ export function renderBars(el: HTMLElement, info: PickInfo, chosen?: Move): void
     row.append(label, track, value);
     return row;
   });
+  const confidenceValue = Math.min(1, Math.max(0, info.confidence ?? 0));
   const confidence = document.createElement("div");
   confidence.className = "confidence";
-  confidence.textContent = `confidence ${(info.confidence ?? 0).toFixed(2)}`;
+  confidence.textContent = `confidence ${confidenceValue.toFixed(2)}`;
   el.replaceChildren(...rows, confidence);
 }
 
