@@ -23,10 +23,14 @@ const usage = `usage:
   jev2048 bench [--players A,B,...] [--games N] [--seed N] [--parallel N] [--max-calls N] [--out FILE]
 
 players: %s
-jev players read the API key from TYPESAFE_API_KEY.
+jev players read the API key from TYPESAFE_API_KEY (the environment, or a .env file in the current directory).
 `
 
 func main() {
+	if err := loadDotEnv(".env"); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	os.Exit(run(os.Args[1:]))
 }
 

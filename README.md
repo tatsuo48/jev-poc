@@ -23,8 +23,10 @@ jev には合法手だけを選択肢として渡す。合法手が 1 つしか�
 go build -o jev2048 ./cmd/jev2048
 ```
 
-```bash
-export TYPESAFE_API_KEY=...   # jev 系のプレイヤーを使うときだけ必要
+jev 系のプレイヤーを使うときだけ API キーが必要。環境変数 `TYPESAFE_API_KEY` に入れるか、実行するディレクトリの `.env`(git 管理外)に書く。両方あれば環境変数が優先される。`.env` から読むのは `TYPESAFE_API_KEY` と `JEV_ENDPOINT` だけ。
+
+```
+TYPESAFE_API_KEY=apikey_...
 ```
 
 ```bash
