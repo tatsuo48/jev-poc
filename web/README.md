@@ -2,6 +2,8 @@
 
 訪問者が AI を選んでスタートを押すと、2048 を 1 手ずつ打つ様子を観戦できるページ。Cloudflare Workers の無料プランで動く。
 
+公開先: https://jev-2048.personal-3f0.workers.dev
+
 ## 仕組み
 
 ゲームはブラウザが進め、Worker は jev への中継だけを行う。
@@ -89,7 +91,7 @@ npx wrangler secret put TYPESAFE_API_KEY
 npm run deploy
 ```
 
-`https://jev-2048.<あなたのサブドメイン>.workers.dev` で公開される。
+`https://jev-2048.<あなたのサブドメイン>.workers.dev` で公開される。初回は先に `npm run deploy` をしてから `secret put` をするとよい(Worker がまだ無い状態で `secret put` をすると、作成の確認を対話で聞かれる)。キーが未登録の間、Worker は jev を呼ばずに 503 を返し、1 日の上限も消費しない。
 
 - 1 日の上限は `wrangler.jsonc` の `DAILY_LIMIT` で変える
 - Rate Limiting binding がプランの都合で拒否された場合は、`wrangler.jsonc` の `ratelimits` を消して再デプロイする。コードは binding が無ければレート制限を飛ばす

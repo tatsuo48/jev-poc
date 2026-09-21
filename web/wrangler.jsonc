@@ -2,6 +2,9 @@
   "name": "jev-2048",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-01",
+  // Serve on *.workers.dev only. Per-version preview URLs are off so old versions do not stay reachable.
+  "workers_dev": true,
+  "preview_urls": false,
   "assets": { "directory": "./public", "binding": "ASSETS" },
   "vars": {
     "JEV_ENDPOINT": "https://api.typesafe.ai/v1/systemone",
