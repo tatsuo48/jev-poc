@@ -13,7 +13,7 @@ export class Budget extends DurableObject<Env> {
         load: () => ctx.storage.get<BudgetState>("state"),
         save: (state) => ctx.storage.put("state", state),
       },
-      dailyLimit(env),
+      dailyLimit(env.DAILY_LIMIT),
     );
   }
 

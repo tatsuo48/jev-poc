@@ -42,11 +42,19 @@ export async function askJev(
         questions: { [QUESTION_KEY]: { type: "choice", instructions: INSTRUCTIONS, criteria: prompt.criteria } },
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
+      // Never follow a redirect: that would resend the Authorization header (with the
+      // bearer key) to whatever host the redirect points at.
+      redirect: "manual",
     });
   } catch {
     throw new UpstreamError(0, "network");
   }
-  if (res.status !== 200) throw new UpstreamError(res.status, "status");
+  if (res.status !== 200) {
+    // Drop the body without reading it: an error page could be large, and its text is
+    // never logged or returned anyway (it could echo the key).
+    void res.body?.cancel();
+    throw new UpstreamError(res.status, "status");
+  }
 
   let data: { answers?: Record<string, { choice?: unknown; probabilities?: unknown; confidence?: unknown }> };
   try {

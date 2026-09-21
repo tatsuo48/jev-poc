@@ -27,6 +27,7 @@ function deps(over: Partial<Deps> = {}) {
       return true;
     },
     dailyLimit: 20000,
+    hasApiKey: true,
     log: (m) => calls.logs.push(m),
     ...over,
   };
@@ -63,6 +64,7 @@ describe("handleApi", () => {
     const res = await handleApi(moveRequest({ player: "jev-sim", board }), d);
     expect(res!.status).toBe(200);
     expect(res!.headers.get("Cache-Control")).toBe("no-store");
+    expect(res!.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(await res!.json()).toEqual({
       move: "right",
       probabilities: { down: 0.3, right: 0.7 },
@@ -108,6 +110,17 @@ describe("handleApi", () => {
       body: JSON.stringify({ player: "jev-raw", board }),
     });
     expect(await errorOf(await handleApi(request, d))).toEqual({ status: 403, body: { error: "forbidden_origin" } });
+  });
+
+  it("answers 503 without spending anything when the API key is not configured", async () => {
+    const { d, calls } = deps({ hasApiKey: false });
+    const res = await handleApi(moveRequest({ player: "jev-raw", board }), d);
+    expect(res!.status).toBe(503);
+    expect(await res!.json()).toEqual({ error: "service_unavailable" });
+    expect(calls.allow).toEqual([]);
+    expect(calls.take).toBe(0);
+    expect(calls.ask).toBe(0);
+    expect(calls.logs).toEqual(["api key not configured"]);
   });
 
   it("rate limits per IP before touching the budget", async () => {

@@ -13,7 +13,8 @@ export default {
       takeBudget: () => budget.take(),
       peekBudget: () => budget.peek(),
       allowRequest: async (ip) => (env.MOVE_LIMITER ? (await env.MOVE_LIMITER.limit({ key: ip })).success : true),
-      dailyLimit: dailyLimit(env),
+      dailyLimit: dailyLimit(env.DAILY_LIMIT),
+      hasApiKey: Boolean(env.TYPESAFE_API_KEY),
       log: (message) => console.error(message),
     });
     return response ?? env.ASSETS.fetch(request);

@@ -12,13 +12,15 @@ export interface Deps {
   peekBudget(): Promise<number>;
   allowRequest(ip: string): Promise<boolean>;
   dailyLimit: number;
+  /** False when TYPESAFE_API_KEY is not configured, so jev must never be called. */
+  hasApiKey: boolean;
   log(message: string): void;
 }
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
   });
 }
 
@@ -106,6 +108,11 @@ async function handleMove(request: Request, url: URL, deps: Deps): Promise<Respo
   }
   const parsed = parseMoveRequest(body);
   if (!parsed) return fail(400, "invalid_request");
+
+  if (!deps.hasApiKey) {
+    deps.log("api key not configured");
+    return fail(503, "service_unavailable");
+  }
 
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
   let allowed: boolean;

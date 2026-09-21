@@ -34,6 +34,13 @@ describe("BudgetCounter", () => {
     expect(await counter.take()).toEqual({ ok: true, remaining: 1 });
   });
 
+  it("limit 0 refuses every take without saving anything (kill switch)", async () => {
+    const store = memoryStore();
+    const counter = new BudgetCounter(store, 0, () => new Date("2026-09-21T10:00:00Z"));
+    expect(await counter.take()).toEqual({ ok: false, remaining: 0 });
+    expect(store.saves).toBe(0);
+  });
+
   it("resets when the UTC date changes", async () => {
     const store = memoryStore();
     let now = new Date("2026-09-21T23:59:59Z");

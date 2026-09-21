@@ -1,5 +1,7 @@
 import type { Budget } from "./budget";
 
+export { DEFAULT_DAILY_LIMIT, dailyLimit } from "./dailyLimit";
+
 export interface Env {
   ASSETS: Fetcher;
   BUDGET: DurableObjectNamespace<Budget>;
@@ -8,11 +10,4 @@ export interface Env {
   TYPESAFE_API_KEY: string;
   JEV_ENDPOINT: string;
   DAILY_LIMIT: string;
-}
-
-export const DEFAULT_DAILY_LIMIT = 20000;
-
-export function dailyLimit(env: Env): number {
-  const n = Number(env.DAILY_LIMIT);
-  return Number.isInteger(n) && n > 0 ? n : DEFAULT_DAILY_LIMIT;
 }

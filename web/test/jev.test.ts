@@ -36,6 +36,7 @@ describe("askJev", () => {
     expect(headers.get("Authorization")).toBe("Bearer test-key");
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(seen!.init.signal).toBeInstanceOf(AbortSignal);
+    expect(seen!.init.redirect).toBe("manual");
     const body = JSON.parse(seen!.init.body as string);
     expect(body.model).toBe("jev-latest");
     expect(body.state).toEqual({ board });
@@ -53,6 +54,16 @@ describe("askJev", () => {
     expect(err.reason).toBe("status");
     expect(String(err.message)).not.toContain("test-key");
     expect(String(err.message)).not.toContain("echo");
+  });
+
+  it("never follows a redirect (and so never forwards the bearer key to it)", async () => {
+    const err = await askJev(
+      async () => new Response(null, { status: 302, headers: { Location: "https://evil.example/steal" } }),
+      "https://jev.example/v1", "test-key", prompt, legal,
+    ).catch((e) => e);
+    expect(err).toBeInstanceOf(UpstreamError);
+    expect(err.status).toBe(302);
+    expect(err.reason).toBe("status");
   });
 
   it("reports network failures", async () => {
