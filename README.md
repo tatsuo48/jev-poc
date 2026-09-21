@@ -96,7 +96,13 @@ jev API: calls=1718 input_tokens=1191322 output_tokens=72081
 
 **confidence は当てになる。** confidence が 0.5 以上の手番では、最大スコアの手を選んだ割合が `jev-raw` で 100%(29/29)、`jev-sim` で 98%(255/260)。0.5 未満では 48% と 70%。平均 confidence は `jev-raw` 0.30、`jev-sim` 0.47 で、情報を与えるほど自信も上がる。「confidence が低い手番だけ探索に回す」という混成プレイヤーが次の実験として筋が良さそう。
 
+## Web デモ
+
+ブラウザで AI を選んで観戦できるページを、Cloudflare Workers の無料プランで動く形で [web/](web/) に置いてある。ゲームと古典 AI はブラウザで動かし、Worker は jev の手番だけを中継する。公開エンドポイントなので、盤面の検証、サーバー側でのプロンプト組み立て、IP ごとのレート制限、全訪問者合計で 1 日 20,000 手の上限を入れている。仕組み・ローカル実行・デプロイ手順は [web/README.md](web/README.md)。
+
 ## 設計
 
 - 設計書: [docs/superpowers/specs/2026-09-21-jev-2048-design.md](docs/superpowers/specs/2026-09-21-jev-2048-design.md)
 - 実装計画: [docs/superpowers/plans/2026-09-21-jev-2048.md](docs/superpowers/plans/2026-09-21-jev-2048.md)
+- Web デモの設計書: [docs/superpowers/specs/2026-09-21-web-demo-design.md](docs/superpowers/specs/2026-09-21-web-demo-design.md)
+- Web デモの実装計画: [docs/superpowers/plans/2026-09-21-web-demo.md](docs/superpowers/plans/2026-09-21-web-demo.md)
