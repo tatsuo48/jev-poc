@@ -52,11 +52,11 @@ func Run(ctx context.Context, cfg Config) ([]runner.Result, error) {
 	}
 	jobs := make(chan job)
 	var (
-		mu        sync.Mutex // guards results, the JSONL encoder, and logErr
-		results   []runner.Result
-		wg        sync.WaitGroup
-		enc       *json.Encoder
-		logErr    error
+		mu      sync.Mutex // guards results, the JSONL encoder, and logErr
+		results []runner.Result
+		wg      sync.WaitGroup
+		enc     *json.Encoder
+		logErr  error
 	)
 	if cfg.Out != nil {
 		enc = json.NewEncoder(cfg.Out)
@@ -82,9 +82,13 @@ func Run(ctx context.Context, cfg Config) ([]runner.Result, error) {
 		}()
 	}
 
+	// Feed seed-first (outer loop over games, inner loop over players) so
+	// that when the call budget runs out mid-run, every player has played
+	// a similar number of games instead of the earliest players getting
+	// all their games in while later ones get none.
 feed:
-	for _, name := range cfg.Players {
-		for g := 0; g < cfg.Games; g++ {
+	for g := 0; g < cfg.Games; g++ {
+		for _, name := range cfg.Players {
 			select {
 			case <-ctx.Done():
 				break feed

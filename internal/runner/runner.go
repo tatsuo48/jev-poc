@@ -23,6 +23,12 @@ type Step struct {
 
 type Observer func(Step)
 
+// Result reports the outcome of one played game. When Err is non-nil, the
+// game was aborted before it finished: Score, Moves, and MaxTile describe
+// only the partial game up to the point of the abort, and callers must not
+// average them together with finished games (see bench.Summarize, which
+// excludes them from its score/move averages but still counts their
+// Latency and tokens).
 type Result struct {
 	Player       string
 	Seed         int64

@@ -36,6 +36,12 @@ func TestRenderShowsBoardAndStats(t *testing.T) {
 	if strings.Contains(s, "confidence") {
 		t.Errorf("non-jev output shows confidence:\n%q", s)
 	}
+	// A classic player never asks jev, so a frame with zero cumulative
+	// tokens must not show a tokens= field at all (it would otherwise
+	// flicker between frames that did and didn't call the API).
+	if strings.Contains(s, "tokens=") {
+		t.Errorf("output with zero tokens shows a tokens= field:\n%q", s)
+	}
 }
 
 func TestRenderShowsProbabilitiesForJev(t *testing.T) {
@@ -46,13 +52,49 @@ func TestRenderShowsProbabilitiesForJev(t *testing.T) {
 	var out bytes.Buffer
 	Render(&out, "jev-sim", step(info), Totals{InputTokens: 900, OutputTokens: 100})
 	s := out.String()
-	for _, want := range []string{"left  " + strings.Repeat("█", 15) + strings.Repeat("░", 5) + " 0.75", "down  ", "confidence=0.50", "tokens=1000"} {
+	for _, want := range []string{
+		"left  " + strings.Repeat("█", 15) + strings.Repeat("░", 5) + " 0.75",
+		"down  ",
+		"score=1234  moves=17  last=left",
+		"confidence=0.50",
+	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("output lacks %q:\n%s", want, s)
 		}
 	}
 	if strings.Contains(s, "up    ") {
 		t.Errorf("output shows a move jev was not offered:\n%s", s)
+	}
+	// The token count belongs on the second header line (with score/moves/
+	// last/latency); the confidence line must be exactly "confidence=0.50"
+	// with nothing appended.
+	for _, line := range strings.Split(s, "\n") {
+		switch {
+		case strings.HasPrefix(line, "score="):
+			if !strings.Contains(line, "tokens=1000") {
+				t.Errorf("header line = %q, want it to contain tokens=1000", line)
+			}
+		case strings.HasPrefix(line, "confidence="):
+			if line != "confidence=0.50" {
+				t.Errorf("confidence line = %q, want exactly \"confidence=0.50\"", line)
+			}
+		}
+	}
+}
+
+func TestRenderClampsOutOfRangeProbabilities(t *testing.T) {
+	info := player.Info{
+		Probabilities: map[game.Move]float64{game.Left: 1.7, game.Down: -0.2},
+		Confidence:    0.5,
+	}
+	var out bytes.Buffer
+	Render(&out, "jev-sim", step(info), Totals{}) // must not panic
+	s := out.String()
+	if !strings.Contains(s, "left  "+strings.Repeat("█", barWidth)+" 1.70") {
+		t.Errorf("left bar not clamped to full:\n%s", s)
+	}
+	if !strings.Contains(s, "down  "+strings.Repeat("░", barWidth)+" -0.20") {
+		t.Errorf("down bar not clamped to empty:\n%s", s)
 	}
 }
 

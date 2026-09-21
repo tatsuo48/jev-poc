@@ -32,7 +32,11 @@ func Render(w io.Writer, playerName string, s runner.Step, tot Totals) {
 	var sb strings.Builder
 	sb.WriteString(clearScreen)
 	fmt.Fprintf(&sb, "jev-2048  player=%s  seed=%d\n", playerName, s.Seed)
-	fmt.Fprintf(&sb, "score=%d  moves=%d  last=%s  latency=%s\n\n", s.Score, s.MoveNo, s.Move, s.Info.Latency.Round(time.Millisecond))
+	fmt.Fprintf(&sb, "score=%d  moves=%d  last=%s  latency=%s", s.Score, s.MoveNo, s.Move, s.Info.Latency.Round(time.Millisecond))
+	if tokens := tot.InputTokens + tot.OutputTokens; tokens > 0 {
+		fmt.Fprintf(&sb, "  tokens=%d", tokens)
+	}
+	sb.WriteString("\n\n")
 
 	for _, row := range s.After {
 		for _, v := range row {
@@ -48,10 +52,10 @@ func Render(w io.Writer, playerName string, s runner.Step, tot Totals) {
 			if !ok {
 				continue
 			}
-			filled := int(math.Round(p * barWidth))
+			filled := min(max(int(math.Round(p*barWidth)), 0), barWidth)
 			fmt.Fprintf(&sb, "%-5s %s%s %.2f\n", m, strings.Repeat("█", filled), strings.Repeat("░", barWidth-filled), p)
 		}
-		fmt.Fprintf(&sb, "confidence=%.2f  tokens=%d\n", s.Info.Confidence, tot.InputTokens+tot.OutputTokens)
+		fmt.Fprintf(&sb, "confidence=%.2f\n", s.Info.Confidence)
 	}
 	io.WriteString(w, sb.String())
 }

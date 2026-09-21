@@ -7,11 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/tatsuo48/jev-poc/internal/game"
 	"github.com/tatsuo48/jev-poc/internal/jev"
 	"github.com/tatsuo48/jev-poc/internal/player"
+	"github.com/tatsuo48/jev-poc/internal/runner"
 )
 
 type firstLegal struct{ name string }
@@ -120,6 +123,41 @@ func TestSummarizeKeepsErroredGamesOutOfAverages(t *testing.T) {
 	}
 }
 
+// TestSummarizeCountsTokensAndLatencyOfAbortedGames covers a gap the
+// existing tests miss: aborted games (Err != nil) must be excluded from
+// score/move averages but must still contribute their tokens and latency,
+// since those resources were genuinely spent (see runner.Result's doc).
+func TestSummarizeCountsTokensAndLatencyOfAbortedGames(t *testing.T) {
+	results := []runner.Result{
+		{Player: "p", Score: 100, Moves: 10, MaxTile: 16, Latency: 10 * time.Millisecond, InputTokens: 50, OutputTokens: 5},
+		{Player: "p", Score: 40, Moves: 4, Latency: 6 * time.Millisecond, InputTokens: 20, OutputTokens: 2, Err: errors.New("aborted")},
+	}
+	sums := Summarize([]string{"p"}, results)
+	if len(sums) != 1 {
+		t.Fatalf("len(sums) = %d, want 1", len(sums))
+	}
+	s := sums[0]
+	if s.Games != 1 || s.Errors != 1 {
+		t.Errorf("Games/Errors = %d/%d, want 1/1", s.Games, s.Errors)
+	}
+	if s.AvgScore != 100 || s.BestScore != 100 {
+		t.Errorf("AvgScore/BestScore = %v/%v, want 100/100", s.AvgScore, s.BestScore)
+	}
+	if s.AvgMoves != 10 {
+		t.Errorf("AvgMoves = %v, want 10", s.AvgMoves)
+	}
+	if len(s.MaxTiles) != 1 || s.MaxTiles[16] != 1 {
+		t.Errorf("MaxTiles = %+v, want {16:1}", s.MaxTiles)
+	}
+	if s.Tokens != 77 {
+		t.Errorf("Tokens = %d, want 77", s.Tokens)
+	}
+	wantLatency := 16 * time.Millisecond / 14
+	if s.AvgLatency != wantLatency {
+		t.Errorf("AvgLatency = %v, want %v", s.AvgLatency, wantLatency)
+	}
+}
+
 func TestRunReportsUnknownPlayerAsError(t *testing.T) {
 	results, err := Run(context.Background(), Config{Players: []string{"nobody"}, Games: 1, Seed: 1, Parallel: 1, New: factory})
 	if err != nil {
@@ -143,6 +181,39 @@ func TestBudgetExceededStopsTheRun(t *testing.T) {
 	}
 	if BudgetExceeded(nil) {
 		t.Fatal("BudgetExceeded(nil) = true")
+	}
+}
+
+type playerSeedCall struct {
+	name string
+	seed int64
+}
+
+func TestRunFeedsJobsSeedFirst(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		calls []playerSeedCall
+	)
+	newPlayer := func(name string, seed int64) (player.Player, error) {
+		mu.Lock()
+		calls = append(calls, playerSeedCall{name, seed})
+		mu.Unlock()
+		return firstLegal{name}, nil
+	}
+	_, err := Run(context.Background(), Config{Players: []string{"a", "b"}, Games: 2, Seed: 5, Parallel: 1, New: newPlayer})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	want := []playerSeedCall{{"a", 5}, {"b", 5}, {"a", 6}, {"b", 6}}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(calls) != len(want) {
+		t.Fatalf("calls = %+v, want %+v", calls, want)
+	}
+	for i := range want {
+		if calls[i] != want[i] {
+			t.Fatalf("calls = %+v, want %+v", calls, want)
+		}
 	}
 }
 
