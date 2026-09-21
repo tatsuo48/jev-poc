@@ -89,9 +89,9 @@ Go の `internal/game` と同じ規則。
 
 | 順 | 処理 | 失敗時 |
 |---|---|---|
-| 1 | メソッドが POST、`Content-Type` が JSON、本文が 2KB 以下 | 405 / 415 / 413 |
+| 1 | メソッドが POST、`Content-Type` が JSON | 405 / 415 |
 | 2 | `Origin` ヘッダがリクエストの URL と同じオリジン | 403 `forbidden_origin` |
-| 3 | `player` が `jev-raw` か `jev-sim`。`board` が 4×4 で、各マスが 0 か 2〜131072 の 2 の累乗。合法手が 2 つ以上 | 400 `invalid_request` |
+| 3 | 本文が 2KB 以下(413 `payload_too_large`)。`player` が `jev-raw` か `jev-sim`。`board` が 4×4 で、各マスが 0 か 2〜131072 の 2 の累乗。合法手が 2 つ以上 | 400 `invalid_request` |
 | 4 | IP(`CF-Connecting-IP`)ごとのレート制限: 10 秒あたり 50 回 | 429 `rate_limited` |
 | 5 | 1 日の上限: Durable Object で 1 手ぶん確保する | 429 `daily_budget_exhausted` |
 | 6 | jev API を 1 回呼ぶ(タイムアウト 10 秒)。Worker 内では再試行しない | 502 `upstream_error` |
@@ -119,7 +119,7 @@ SQLite バックエンドの Durable Object を 1 つだけ(名前 `global`)使�
 
 - `take()`: UTC の日付をキーに、その日の消費数が 20,000 未満なら 1 増やして `{ok: true, remaining}` を返す。達していれば `{ok: false, remaining: 0}`
 - `peek()`: 消費せずに残りを返す
-- 日付が変わったら古い日の行は消す
+- 保存するのは「日付と消費数」の 1 件だけ。日付が変わった最初の `take()` で上書きされる
 - 上限値は `wrangler.jsonc` の変数 `DAILY_LIMIT`(既定 20000)で変えられる
 
 ### クライアント
