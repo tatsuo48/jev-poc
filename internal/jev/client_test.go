@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -131,6 +132,89 @@ func TestAskDoesNotRetry401(t *testing.T) {
 	}
 }
 
+func TestAskDoesNotRetry422(t *testing.T) {
+	var hits atomic.Int32
+	c := newTestClient(t, 0, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		io.WriteString(w, `{"error":"validation failed"}`)
+	})
+	_, err := c.Ask(context.Background(), "s", question)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != 422 || hits.Load() != 1 {
+		t.Fatalf("err = %v, hits = %d", err, hits.Load())
+	}
+}
+
+func TestAskRetriesOnTransientStatuses(t *testing.T) {
+	for _, status := range []int{500, 502, 503, 504} {
+		t.Run(fmt.Sprintf("%d", status), func(t *testing.T) {
+			var hits atomic.Int32
+			c := newTestClient(t, 0, func(w http.ResponseWriter, r *http.Request) {
+				if hits.Add(1) == 1 {
+					w.WriteHeader(status)
+					return
+				}
+				io.WriteString(w, okBody)
+			})
+			if _, err := c.Ask(context.Background(), "s", question); err != nil {
+				t.Fatal(err)
+			}
+			if hits.Load() != 2 {
+				t.Fatalf("hits = %d, want 2", hits.Load())
+			}
+			if s := c.Stats(); s.Calls != 1 {
+				t.Fatalf("retries counted as calls: %+v", s)
+			}
+		})
+	}
+}
+
+func TestAskRetriesOnNetworkError(t *testing.T) {
+	var hits atomic.Int32
+	c := newTestClient(t, 0, func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatal("ResponseWriter does not support hijacking")
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				t.Fatal(err)
+			}
+			conn.Close()
+			return
+		}
+		io.WriteString(w, okBody)
+	})
+	if _, err := c.Ask(context.Background(), "s", question); err != nil {
+		t.Fatal(err)
+	}
+	if hits.Load() != 2 {
+		t.Fatalf("hits = %d, want 2", hits.Load())
+	}
+	if s := c.Stats(); s.Calls != 1 {
+		t.Fatalf("retries counted as calls: %+v", s)
+	}
+}
+
+func TestAskDoesNotRetryWhenContextAlreadyCancelled(t *testing.T) {
+	var hits atomic.Int32
+	c := newTestClient(t, 0, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		io.WriteString(w, okBody)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.Ask(ctx, "s", question)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if hits.Load() > 1 {
+		t.Fatalf("hits = %d, want at most 1", hits.Load())
+	}
+}
+
 func TestAskEnforcesMaxCalls(t *testing.T) {
 	var hits atomic.Int32
 	c := newTestClient(t, 2, func(w http.ResponseWriter, r *http.Request) {
@@ -171,9 +255,16 @@ func TestNewRequiresAPIKey(t *testing.T) {
 func TestErrorsNeverContainTheKey(t *testing.T) {
 	c := newTestClient(t, 0, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintf(w, `{"error":"unauthorized","received_header":%q}`, r.Header.Get("Authorization"))
 	})
 	_, err := c.Ask(context.Background(), "s", question)
-	if err == nil || strings.Contains(err.Error(), "test-key") {
-		t.Fatalf("err = %v", err)
+	if err == nil {
+		t.Fatal("err = nil, want error")
+	}
+	if strings.Contains(err.Error(), "test-key") {
+		t.Fatalf("err leaks the API key: %v", err)
+	}
+	if !strings.Contains(err.Error(), "[REDACTED]") {
+		t.Fatalf("err does not show a redaction marker: %v", err)
 	}
 }

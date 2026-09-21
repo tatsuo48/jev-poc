@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -37,6 +38,15 @@ type APIError struct {
 func (e *APIError) Error() string {
 	return fmt.Sprintf("jev: HTTP %d: %s", e.Status, e.Body)
 }
+
+// netError marks a failure from the underlying transport (dialing, writing
+// the request, or reading the response) as opposed to request construction
+// or JSON decoding. retryable uses this to decide whether it is safe to
+// retry the call.
+type netError struct{ err error }
+
+func (e *netError) Error() string { return e.err.Error() }
+func (e *netError) Unwrap() error { return e.err }
 
 type Question struct {
 	Type         string            `json:"type"`
@@ -139,9 +149,7 @@ func (c *Client) Ask(ctx context.Context, state any, questions map[string]Questi
 			c.outputTokens.Add(int64(resp.Usage.OutputTokens))
 			return resp, nil
 		}
-		var apiErr *APIError
-		retryable := errors.As(err, &apiErr) && (apiErr.Status == http.StatusTooManyRequests || apiErr.Status == statusOverload)
-		if !retryable || attempt == maxRetries {
+		if !retryable(ctx, err) || attempt == maxRetries {
 			return Response{}, err
 		}
 		select {
@@ -151,6 +159,28 @@ func (c *Client) Ask(ctx context.Context, state any, questions map[string]Questi
 		}
 		delay *= 2
 	}
+}
+
+// retryable reports whether err is worth retrying. It retries transient API
+// statuses (429, 5xx, and the vendor-specific 529 "overloaded") and
+// transport-level errors, but never when the caller's own ctx is what ended
+// the attempt: a 10s http.Client.Timeout is not the caller's context and is
+// still retried, but a cancelled or expired ctx is not.
+func retryable(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.Status {
+		case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, statusOverload:
+			return true
+		default:
+			return false
+		}
+	}
+	var ne *netError
+	return errors.As(err, &ne)
 }
 
 func (c *Client) post(ctx context.Context, body []byte) (Response, error) {
@@ -163,19 +193,22 @@ func (c *Client) post(ctx context.Context, body []byte) (Response, error) {
 
 	res, err := c.http.Do(req)
 	if err != nil {
-		return Response{}, fmt.Errorf("jev: send request: %w", err)
+		return Response{}, fmt.Errorf("jev: send request: %w", &netError{err})
 	}
 	defer res.Body.Close()
 
 	data, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return Response{}, fmt.Errorf("jev: read response: %w", err)
+		return Response{}, fmt.Errorf("jev: read response: %w", &netError{err})
 	}
 	if res.StatusCode != http.StatusOK {
-		if len(data) > 500 {
-			data = data[:500]
+		// Redact the key before truncating so a key straddling the 500-byte
+		// cut can never survive partially in the reported error.
+		body := strings.ReplaceAll(string(data), c.apiKey, "[REDACTED]")
+		if len(body) > 500 {
+			body = body[:500]
 		}
-		return Response{}, &APIError{Status: res.StatusCode, Body: string(data)}
+		return Response{}, &APIError{Status: res.StatusCode, Body: body}
 	}
 	var out Response
 	if err := json.Unmarshal(data, &out); err != nil {
