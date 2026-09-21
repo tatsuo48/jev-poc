@@ -153,4 +153,104 @@ describe("handleApi", () => {
     expect(await res!.json()).toEqual({ remaining: 12345, limit: 20000 });
     expect(calls.take).toBe(0);
   });
+
+  it("rejects an oversized Content-Length header before reading the body", async () => {
+    const { d, calls } = deps();
+    const request = new Request(`${ORIGIN}/api/move`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: ORIGIN,
+        "CF-Connecting-IP": "203.0.113.7",
+        "Content-Length": "5000",
+      },
+      body: JSON.stringify({ player: "jev-raw", board }),
+    });
+    expect(await errorOf(await handleApi(request, d))).toEqual({ status: 413, body: { error: "payload_too_large" } });
+    expect(calls.take).toBe(0);
+    expect(calls.ask).toBe(0);
+  });
+
+  it("stops reading the body as soon as it exceeds the limit", async () => {
+    const { d, calls } = deps();
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        if (pulled > 100) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(1024).fill(65));
+      },
+    });
+    const request = new Request(`${ORIGIN}/api/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: ORIGIN, "CF-Connecting-IP": "203.0.113.7" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit);
+    expect(await errorOf(await handleApi(request, d))).toEqual({ status: 413, body: { error: "payload_too_large" } });
+    expect(pulled).toBeLessThanOrEqual(4);
+    expect(calls.take).toBe(0);
+    expect(calls.ask).toBe(0);
+  });
+
+  it("fails open when the rate limiter throws, but still spends the budget", async () => {
+    const { d, calls } = deps({
+      allowRequest: async () => {
+        throw new Error("kv namespace unavailable");
+      },
+    });
+    const res = await handleApi(moveRequest({ player: "jev-raw", board }), d);
+    expect(res!.status).toBe(200);
+    expect(calls.take).toBe(1);
+    expect(calls.ask).toBe(1);
+    expect(calls.logs).toEqual(["rate limiter failed"]);
+  });
+
+  it("fails closed when the budget counter throws", async () => {
+    const { d, calls } = deps({
+      takeBudget: async () => {
+        throw new Error("durable object unavailable");
+      },
+    });
+    const res = await handleApi(moveRequest({ player: "jev-raw", board }), d);
+    expect(res!.status).toBe(503);
+    expect(await res!.json()).toEqual({ error: "service_unavailable" });
+    expect(calls.ask).toBe(0);
+    expect(calls.logs).toEqual(["budget unavailable"]);
+  });
+
+  it("answers 503 when /api/status cannot read the budget", async () => {
+    const { d, calls } = deps({
+      peekBudget: async () => {
+        throw new Error("durable object unavailable");
+      },
+    });
+    const res = await handleApi(new Request(`${ORIGIN}/api/status`), d);
+    expect(res!.status).toBe(503);
+    expect(await res!.json()).toEqual({ error: "service_unavailable" });
+    expect(calls.logs).toEqual(["budget unavailable"]);
+  });
+
+  it("turns any other unexpected failure into a generic 500 without leaking details", async () => {
+    const { d, calls } = deps();
+    const request = {
+      method: "POST",
+      url: `${ORIGIN}/api/move`,
+      headers: {
+        get: () => {
+          throw new Error("secret internal detail");
+        },
+      },
+      body: null,
+    } as unknown as Request;
+    const res = await handleApi(request, d);
+    expect(res!.status).toBe(500);
+    const text = await res!.text();
+    expect(text).toBe('{"error":"internal_error"}');
+    expect(text).not.toContain("secret internal detail");
+    expect(calls.logs).toEqual(["unexpected error"]);
+  });
 });
