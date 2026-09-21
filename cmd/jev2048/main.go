@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -31,7 +32,7 @@ func main() {
 
 func run(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, usage, strings.Join(player.Names, ", "))
+		printUsage()
 		return 2
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -43,8 +44,12 @@ func run(args []string) int {
 	case "bench":
 		return runBench(ctx, args[1:])
 	}
-	fmt.Fprintf(os.Stderr, usage, strings.Join(player.Names, ", "))
+	printUsage()
 	return 2
+}
+
+func printUsage() {
+	fmt.Fprintf(os.Stderr, usage, strings.Join(player.Names, ", "))
 }
 
 // newClient returns nil when none of the players talks to jev, so that the
@@ -73,6 +78,17 @@ func runWatch(ctx context.Context, args []string) int {
 	delay := fs.Duration("delay", 100*time.Millisecond, "pause between moves")
 	maxCalls := fs.Int("max-calls", 5000, "upper bound on jev API calls (0 = unlimited)")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	// Validate the player name before requiring an API key, the same way
+	// runBench does, so a typo like "jev-typo" is reported as "unknown
+	// player" even when TYPESAFE_API_KEY is not set.
+	if _, err := player.New(*name, *seed, noopAsker{}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
 
@@ -101,15 +117,34 @@ func runBench(ctx context.Context, args []string) int {
 	maxCalls := fs.Int("max-calls", 20000, "upper bound on jev API calls (0 = unlimited)")
 	outPath := fs.String("out", "", "write one JSON line per move to this file")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 
 	names := strings.Split(*players, ",")
-	for _, name := range names {
+	seen := make(map[string]bool, len(names))
+	for i, name := range names {
+		name = strings.TrimSpace(name)
+		names[i] = name
+		if name == "" {
+			fmt.Fprintln(os.Stderr, "bench: --players contains an empty name")
+			return 2
+		}
+		if seen[name] {
+			fmt.Fprintf(os.Stderr, "bench: --players lists %q more than once\n", name)
+			return 2
+		}
+		seen[name] = true
 		if _, err := player.New(name, 0, noopAsker{}); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
+	}
+	if *games < 1 {
+		fmt.Fprintln(os.Stderr, "bench: --games must be at least 1")
+		return 2
 	}
 	client, err := newClient(names, *maxCalls)
 	if err != nil {
@@ -155,18 +190,28 @@ func runBench(ctx context.Context, args []string) int {
 		s := client.Stats()
 		fmt.Printf("\njev API: calls=%d input_tokens=%d output_tokens=%d\n", s.Calls, s.InputTokens, s.OutputTokens)
 	}
-	if bench.BudgetExceeded(results) {
-		fmt.Fprintln(os.Stderr, "stopped: --max-calls was reached")
-		return 1
-	}
+
+	// Print logErr before the budget-exceeded message so neither hides the
+	// other; the exit code is 1 if any of these conditions happened.
+	exitCode := 0
 	if logErr != nil {
 		fmt.Fprintln(os.Stderr, logErr)
-		return 1
+		exitCode = 1
+	}
+	if bench.BudgetExceeded(results) {
+		fmt.Fprintln(os.Stderr, "stopped: --max-calls was reached")
+		exitCode = 1
+	}
+	for _, r := range results {
+		if r.Err != nil {
+			exitCode = 1
+			break
+		}
 	}
 	if ctx.Err() != nil {
-		return 1
+		exitCode = 1
 	}
-	return 0
+	return exitCode
 }
 
 // noopAsker lets runBench validate player names before it needs an API key.
