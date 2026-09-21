@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Board, Game } from "../src/shared/game";
-import { ApiError, type Player, createPlayer, monotonicity } from "../src/client/players";
+import { ApiError, type Player, createPlayer, monotonicity, playerSeed } from "../src/client/players";
 
 const stuck: Board = [
   [2, 4, 2, 4],
@@ -33,6 +33,11 @@ describe("classic players", () => {
 
   it("random is deterministic per seed", async () => {
     expect(await playOut(createPlayer("random", 5), 9)).toBe(await playOut(createPlayer("random", 5), 9));
+  });
+
+  it("playerSeed decorrelates the random player's RNG from the game's own RNG", () => {
+    expect(playerSeed(1)).not.toBe(1);
+    expect(playerSeed(0)).toBe(0x9e3779b9);
   });
 
   it("greedy prefers the higher gain, then more empty cells, then ALL_MOVES order", async () => {
@@ -100,5 +105,28 @@ describe("jev player", () => {
     expect((await down.pick(cornerTile).catch((e) => e)).code).toBe("network_error");
     const bad = createPlayer("jev-raw", 1, okFetch({ move: "up" }));
     expect((await bad.pick(cornerTile).catch((e) => e)).code).toBe("upstream_error");
+  });
+
+  it("maps a non-JSON 429 page (Cloudflare's own) to rate_limited", async () => {
+    const p = createPlayer("jev-raw", 1, (async () => new Response("<html>Too Many Requests</html>", { status: 429 })) as typeof fetch);
+    const err = await p.pick(cornerTile).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe("rate_limited");
+    expect(err.status).toBe(429);
+  });
+
+  it("maps a non-JSON 5xx page (Cloudflare's own) to service_unavailable", async () => {
+    const p = createPlayer("jev-raw", 1, (async () => new Response("<html>Service Unavailable</html>", { status: 503 })) as typeof fetch);
+    const err = await p.pick(cornerTile).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe("service_unavailable");
+    expect(err.status).toBe(503);
+  });
+
+  it("a JSON error body wins over the status-based mapping", async () => {
+    const p = createPlayer("jev-raw", 1, (async () => new Response('{"error":"daily_budget_exhausted"}', { status: 500 })) as typeof fetch);
+    const err = await p.pick(cornerTile).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe("daily_budget_exhausted");
   });
 });

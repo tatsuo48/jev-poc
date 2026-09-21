@@ -27,14 +27,29 @@ export class ApiError extends Error {
 
 const EXPECTIMAX_DEPTH = 3;
 
+/** Maps an error response's HTTP status to a code when the body carries no `error` field (Cloudflare's own error pages, e.g. HTML 429/5xx). */
+function statusErrorCode(status: number): string {
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "service_unavailable";
+  return "upstream_error";
+}
+
 function requireLegal(board: Board): Move[] {
   const legal = legalMoves(board);
   if (legal.length === 0) throw new Error("no legal moves");
   return legal;
 }
 
+/**
+ * Derives the random player's RNG seed from the game seed so its move stream never lines up
+ * with the game's own tile-spawn RNG (both are mulberry32 seeded from the same input).
+ */
+export function playerSeed(seed: number): number {
+  return (seed ^ 0x9e3779b9) >>> 0;
+}
+
 function randomPlayer(seed: number): Player {
-  const rand = mulberry32(seed);
+  const rand = mulberry32(playerSeed(seed));
   return {
     name: "random",
     usesJev: false,
@@ -149,7 +164,7 @@ function jevPlayer(name: JevPlayer, fetcher: typeof fetch): Player {
       const data = (await res.json().catch(() => ({}))) as {
         error?: string; move?: Move; probabilities?: PickInfo["probabilities"]; confidence?: number; remaining?: number;
       };
-      if (!res.ok) throw new ApiError(data.error ?? "upstream_error", res.status);
+      if (!res.ok) throw new ApiError(data.error ?? statusErrorCode(res.status), res.status);
       if (!data.move || !legal.includes(data.move)) throw new ApiError("upstream_error", res.status);
       return {
         move: data.move,
