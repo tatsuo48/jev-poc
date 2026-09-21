@@ -53,6 +53,8 @@ npm run deploy     # ユーザーが実行する
 - `preview_urls` は意図して無効(古いバージョンを別 URL で触れる状態にしない)
 - `web/public/_headers` の CSP は `default-src 'self'`。インラインの script / style / イベントハンドラを足すと動かなくなる
 - ユーザーのシェルは fish。アプリの Run ボタンは実行ごとに環境変数が引き継がれないことがあるので、キーは `.env` 経由で渡す
+- 変更はブランチを切って PR で入れる。main へ直接 push しない。push やマージの前にユーザーに確認する
+- CI(`.github/workflows/ci.yml`)は push と PR で走る: Go は `gofmt` / `go vet` / `go test -race`、Web は `npm ci` / `typecheck` / `test` / `build`。CI にはキーを置かないので、実 API の統合テストはスキップされる
 - コミットメッセージの作法: `feat(web): ...` / `fix(cli): ...` / `docs: ...`
 
 ## 次にやると面白そうなこと
