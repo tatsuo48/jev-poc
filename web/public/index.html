@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>jev plays 2048</title>
+  <meta name="description" content="文章を生成しない判定モデル jev に 2048 を遊ばせて、古典 AI と見比べるデモ">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>jev plays 2048</h1>
+      <p class="lead">文章を生成せず「判定」だけを返す AI モデル jev に、2048 を 1 手ずつ打たせます。</p>
+    </header>
+
+    <section class="controls" aria-label="設定">
+      <label>プレイヤー <select id="player"></select></label>
+      <label>シード <input id="seed" type="number" value="42" min="0" max="999999" inputmode="numeric"></label>
+      <label>速さ
+        <select id="speed">
+          <option value="500">ゆっくり</option>
+          <option value="150" selected>ふつう</option>
+          <option value="0">速い</option>
+        </select>
+      </label>
+      <button id="start" type="button">▶ スタート</button>
+    </section>
+
+    <p id="stats" class="stats" aria-live="off">score 0　moves 0</p>
+
+    <section class="stage">
+      <div id="board" class="board" role="img" aria-label="2048 の盤面"></div>
+      <div id="bars" class="bars" hidden></div>
+    </section>
+
+    <p id="message" class="message" role="status"></p>
+    <p id="remaining" class="remaining"></p>
+
+    <details>
+      <summary>これは何?</summary>
+      <p><a href="https://docs.typesafe.ai/introduction">jev</a> は TypeSafe AI のモデルで、文章を生成せず、選択肢から 1 つを選ぶといった型付きの判定だけを約 0.2 秒で返します。各手番で「上下左右のどれを打つか」を選ばせ、選択肢ごとの確率と confidence(迷っているほど低い)を右に表示しています。</p>
+      <ul>
+        <li><b>jev-raw</b>: 盤面の数字だけを見せて選ばせます。</li>
+        <li><b>jev-sim</b>: 各手を打った後の盤面と、得点・空きマス数などを計算して見せてから選ばせます。</li>
+        <li><b>expectimax</b>: 3 手先まで先読みする古典的な探索 AI。<b>greedy</b>: 目先の得点が最大の手。<b>random</b>: ランダム。この 3 つはあなたのブラウザの中で動きます。</li>
+      </ul>
+      <p>コマンドライン版で 5 ゲームずつ遊ばせた平均スコアです(2026-09-21、jev-1.13.0)。</p>
+      <table>
+        <thead><tr><th>プレイヤー</th><th>平均スコア</th><th>最高</th><th>1 手あたり</th></tr></thead>
+        <tbody>
+          <tr><td>random</td><td>832</td><td>1,064</td><td>1µs</td></tr>
+          <tr><td>jev-raw</td><td>1,464</td><td>2,784</td><td>221ms</td></tr>
+          <tr><td>jev-sim</td><td>2,307</td><td>4,624</td><td>221ms</td></tr>
+          <tr><td>greedy</td><td>4,046</td><td>7,616</td><td>1µs</td></tr>
+          <tr><td>expectimax</td><td>27,173</td><td>37,384</td><td>4ms</td></tr>
+        </tbody>
+      </table>
+      <p>jev の判定は毎回少し揺れるので、同じシードでも展開は変わります。jev の呼び出しには全訪問者の合計で 1 日の上限があり、上限に達すると jev 系は翌日(UTC)まで休みになります。</p>
+      <p>仕組みとソースコード: <a href="https://github.com/tatsuo48/jev-poc">github.com/tatsuo48/jev-poc</a></p>
+    </details>
+  </main>
+  <script type="module" src="/client.js"></script>
+</body>
+</html>
