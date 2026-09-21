@@ -1,0 +1,17 @@
+{
+  "name": "jev-2048",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "vars": {
+    "JEV_ENDPOINT": "https://api.typesafe.ai/v1/systemone",
+    "DAILY_LIMIT": "20000"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "BUDGET", "class_name": "Budget" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Budget"] }],
+  "ratelimits": [
+    { "name": "MOVE_LIMITER", "namespace_id": "2048", "simple": { "limit": 50, "period": 10 } }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "jev-2048-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/client/main.ts --bundle --format=esm --target=es2022 --minify --outfile=public/client.js",
+    "dev": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260921.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1",
+    "wrangler": "^4.135.0"
+  }
+}

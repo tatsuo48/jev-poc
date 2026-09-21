@@ -1,3 +1,7 @@
 /jev2048
 *.jsonl
 .env
+web/node_modules
+web/public/client.js
+web/.dev.vars
+web/.wrangler
