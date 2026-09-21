@@ -92,7 +92,7 @@ Go の `internal/game` と同じ規則。
 | 1 | メソッドが POST、`Content-Type` が JSON | 405 / 415 |
 | 2 | `Origin` ヘッダがリクエストの URL と同じオリジン | 403 `forbidden_origin` |
 | 3 | 本文が 2KB 以下(413 `payload_too_large`)。`player` が `jev-raw` か `jev-sim`。`board` が 4×4 で、各マスが 0 か 2〜131072 の 2 の累乗。合法手が 2 つ以上 | 400 `invalid_request` |
-| 4 | IP(`CF-Connecting-IP`)ごとのレート制限: 10 秒あたり 50 回 | 429 `rate_limited` |
+| 4 | IP(`CF-Connecting-IP`)ごとのレート制限: 10 秒あたり 150 回(当初は 50 回。1 ゲームが 10 秒に 30〜40 回呼ぶため、1 つの IP を複数人が共有すると厳しすぎた) | 429 `rate_limited` |
 | 5 | 1 日の上限: Durable Object で 1 手ぶん確保する | 429 `daily_budget_exhausted` |
 | 6 | jev API を 1 回呼ぶ(タイムアウト 10 秒)。Worker 内では再試行しない | 502 `upstream_error` |
 | 7 | 応答の `choice` が合法手であることを確認する | 502 `upstream_error` |

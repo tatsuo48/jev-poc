@@ -15,6 +15,6 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Budget"] }],
   "ratelimits": [
-    { "name": "MOVE_LIMITER", "namespace_id": "2048", "simple": { "limit": 50, "period": 10 } }
+    { "name": "MOVE_LIMITER", "namespace_id": "2048", "simple": { "limit": 150, "period": 10 } }
   ]
 }
