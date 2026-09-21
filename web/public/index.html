@@ -43,8 +43,11 @@
       <ul>
         <li><b>jev-raw</b>: 盤面の数字だけを見せて選ばせます。</li>
         <li><b>jev-sim</b>: 各手を打った後の盤面と、得点・空きマス数などを計算して見せてから選ばせます。</li>
-        <li><b>expectimax</b>: 3 手先まで先読みする古典的な探索 AI。<b>greedy</b>: 目先の得点が最大の手。<b>random</b>: ランダム。この 3 つはあなたのブラウザの中で動きます。</li>
+        <li><b>expectimax</b>: 3 手先まで先読みする古典的な探索 AI です。</li>
+        <li><b>greedy</b>: その 1 手で得点がいちばん増える手を選びます。</li>
+        <li><b>random</b>: 動かせる手からランダムに選びます。</li>
       </ul>
+      <p>jev-raw と jev-sim は 1 手ごとに jev に問い合わせます。expectimax、greedy、random の 3 つは jev を使わず、あなたのブラウザの中だけで動きます。</p>
       <p>コマンドライン版で 5 ゲームずつ遊ばせた平均スコアです(2026-09-21、jev-1.13.0)。</p>
       <table>
         <thead><tr><th>プレイヤー</th><th>平均スコア</th><th>最高</th><th>1 手あたり</th></tr></thead>
