@@ -118,13 +118,14 @@ func runBench(ctx context.Context, args []string) int {
 	}
 
 	var out io.Writer
+	var outFile *os.File
 	if *outPath != "" {
 		f, err := os.Create(*outPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		defer f.Close()
+		outFile = f
 		out = f
 	}
 
@@ -138,6 +139,11 @@ func runBench(ctx context.Context, args []string) int {
 			return player.New(name, seed, asker(client))
 		},
 	})
+	if outFile != nil {
+		if cerr := outFile.Close(); cerr != nil && logErr == nil {
+			logErr = fmt.Errorf("bench: close move log: %w", cerr)
+		}
+	}
 
 	bench.WriteTable(os.Stdout, bench.Summarize(names, results))
 	for _, r := range results {
